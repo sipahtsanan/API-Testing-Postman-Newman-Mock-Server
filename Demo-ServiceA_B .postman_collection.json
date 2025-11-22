@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "84bfb29e-ee25-4857-b2ee-e13bd7890d2d",
 		"name": "Demo – Service A & B (v2)",
-		"description": "Service A (/users) และ Service B (/orders) ที่ order ต้องใช้ user จาก Service A มีตัวอย่าง folder-level token, lazy init และ Suite orchestrator.",
+		"description": "Service A (/users) และ Service B (/orders) ที่ order ต้องใช้ user จาก Service A มีตัวอย่าง folder-level token, lazy init.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "14598843"
 	},
