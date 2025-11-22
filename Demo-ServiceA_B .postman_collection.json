@@ -1,0 +1,571 @@
+{
+	"info": {
+		"_postman_id": "84bfb29e-ee25-4857-b2ee-e13bd7890d2d",
+		"name": "Demo – Service A & B (v2)",
+		"description": "Service A (/users) และ Service B (/orders) ที่ order ต้องใช้ user จาก Service A มีตัวอย่าง folder-level token, lazy init และ Suite orchestrator.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "14598843"
+	},
+	"item": [
+		{
+			"name": "Service A – Users",
+			"item": [
+				{
+					"name": "/users",
+					"item": [
+						{
+							"name": "Users – Create demo user (manual)",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test('status is 201', function () {",
+											"  pm.response.to.have.status(201);",
+											"});",
+											"",
+											"const body = pm.response.json();",
+											"pm.test('created user has id', function () {",
+											"  pm.expect(body).to.have.property('id');",
+											"});",
+											"",
+											"if (body && body.id) {",
+											"  pm.environment.set('svcA_userId', body.id);",
+											"  console.log('Saved svcA_userId =', body.id);",
+											"}"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								},
+								{
+									"listen": "prerequest",
+									"script": {
+										"exec": [
+											"let uuid = pm.variables.replaceIn('{{$uuid}}');",
+											"pm.variables.set(\"uuid4\", uuid.slice(-4));"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									},
+									{
+										"key": "",
+										"value": "",
+										"type": "text",
+										"disabled": true
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Manual Demo User\",\n    \"email\": \"manual.demo-{{uuid4}}@example.com\"\n}"
+								},
+								"url": {
+									"raw": "{{svcA_baseUrl}}/users",
+									"host": [
+										"{{svcA_baseUrl}}"
+									],
+									"path": [
+										"users"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "/users/{{id}}",
+					"item": [
+						{
+							"name": "Users – Get by id",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test('status is 200', function () {",
+											"  pm.response.to.have.status(200);",
+											"});",
+											"",
+											"const body = pm.response.json();",
+											"pm.test('user id matches svcA_userId', function () {",
+											"  const expected = pm.environment.get('svcA_userId');",
+											"   pm.expect(String(body.id)).to.eql(String(expected));",
+											"});"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								},
+								{
+									"listen": "prerequest",
+									"script": {
+										"exec": [
+											"// Generate a unique identifier for the email",
+											"const pre_uuid4 = (pm.variables.replaceIn('{{$randomUUID}}')).slice(-4);",
+											"",
+											"// Prepare the request payload",
+											"const userData = {",
+											"    name: \"Pre-request Demo User\",",
+											"    email: \"prereq.demo-\" + pre_uuid4 + \"@example.com\"",
+											"};",
+											"",
+											"// Make POST request to create a user",
+											"try {",
+											"    const response = await pm.sendRequest({",
+											"        url: pm.variables.replaceIn('{{svcA_baseUrl}}/users'),",
+											"        method: 'POST',",
+											"        header: {",
+											"            'Content-Type': 'application/json'",
+											"        },",
+											"        body: {",
+											"            mode: 'raw',",
+											"            raw: JSON.stringify(userData)",
+											"        }",
+											"    });",
+											"    ",
+											"    // Check if request was successful",
+											"    if (response.code === 201 || response.code === 200) {",
+											"        const responseBody = response.json();",
+											"        console.log('User created successfully:', responseBody);",
+											"        ",
+											"        // Save user ID to environment variable if present in response",
+											"        if (responseBody && responseBody.id) {",
+											"            pm.environment.set('prereq_userId', responseBody.id);",
+											"            console.log('Saved prereq_userId:', responseBody.id);",
+											"        }",
+											"        ",
+											"    } ",
+											"    else {",
+											"        console.error('Failed to create user. Status:', response.code);",
+											"        console.error('Response:', response.text());",
+											"    }",
+											"} catch (error) {",
+											"    console.error('Error creating user in pre-request:', error);",
+											"    console.error('Error details:', error.message || error);",
+											"}"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Accept",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "{{svcA_baseUrl}}/users/{{svcA_userId}}",
+									"host": [
+										"{{svcA_baseUrl}}"
+									],
+									"path": [
+										"users",
+										"{{svcA_userId}}"
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				}
+			],
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"type": "text/javascript",
+						"requests": {},
+						"exec": [
+							"// Service A folder pre-request: ensure svcA_access_token",
+							"const svcABaseUrl = pm.environment.get('svcA_baseUrl');",
+							"let svcAToken = pm.environment.get('svcA_access_token');",
+							"",
+							"if (!svcAToken) {",
+							"    console.log('No svcA_access_token yet → requesting new one');",
+							"    if (!svcABaseUrl) {",
+							"        throw new Error('svcA_baseUrl is not set in environment');",
+							"    }",
+							"    pm.sendRequest({",
+							"        url: svcABaseUrl + '/auth/token',",
+							"        method: 'POST',",
+							"        header: { 'Content-Type': 'application/json' },",
+							"        body: {",
+							"            mode: 'raw',",
+							"            raw: JSON.stringify({",
+							"            client_id: pm.environment.get('svcA_client_id'),",
+							"            client_secret: pm.environment.get('svcA_client_secret')",
+							"            })",
+							"        }",
+							"    }, function (err, res) {",
+							"        if (err || res.code >= 300) {",
+							"        throw new Error('Failed to get Service A token: ' + (err || res.code));",
+							"    }",
+							"    const data = res.json();",
+							"    const token = data.access_token || data.token;",
+							"    pm.environment.set('svcA_access_token', token);",
+							"    pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token });",
+							"    });",
+							"} else {",
+							"    pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + svcAToken });",
+							"}"
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {},
+						"exec": [
+							""
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Service B – Orders",
+			"item": [
+				{
+					"name": "/orders",
+					"item": [
+						{
+							"name": "Orders – Create 201 (uses user from Service A)",
+							"event": [
+								{
+									"listen": "prerequest",
+									"script": {
+										"exec": [
+											""
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								},
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test('status is 201', function () {",
+											"  pm.response.to.have.status(201);",
+											"});",
+											"",
+											"",
+											"const body = pm.response.json();",
+											"",
+											"pm.test('order has id and userId', function () {",
+											"  pm.expect(body).to.have.property('id');",
+											"  pm.expect(body).to.have.property('userId');",
+											"});",
+											"",
+											"pm.test('order amount is correct', function () {",
+											"  pm.expect(body.amount).to.eql(100);",
+											"});"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"userId\": {{svcA_userId}},\n  \"amount\": 100,\n  \"currency\": \"THB\"\n}"
+								},
+								"url": {
+									"raw": "{{svcB_baseUrl}}/orders",
+									"host": [
+										"{{svcB_baseUrl}}"
+									],
+									"path": [
+										"orders"
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Orders – 400 invalid amount",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"pm.test('status is 400', function () {",
+											"  pm.response.to.have.status(400);",
+											"});"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"userId\": {{svcA_userId}},\n  \"amount\": -1,\n  \"currency\": \"THB\"\n}"
+								},
+								"url": {
+									"raw": "{{svcB_baseUrl}}/orders",
+									"host": [
+										"{{svcB_baseUrl}}"
+									],
+									"path": [
+										"orders"
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {},
+								"exec": [
+									"// Orders create pre-request: lazy init user from Service A if needed",
+									"let userId = pm.environment.get('svcA_userId');",
+									"const svcABaseUrl = pm.environment.get('svcA_baseUrl');",
+									"",
+									"function createUserWithToken(token) {",
+									"  pm.sendRequest({",
+									"    url: svcABaseUrl + '/users',",
+									"    method: 'POST',",
+									"    header: {",
+									"      'Content-Type': 'application/json',",
+									"      'Authorization': 'Bearer ' + token",
+									"    },",
+									"    body: {",
+									"      mode: 'raw',",
+									"      raw: JSON.stringify({",
+									"        name: 'Postman Demo User',",
+									"        email: 'qa+' + prep_uuid4 + '@example.com'",
+									"      })",
+									"    }",
+									"  }, function (err, res) {",
+									"    if (err || res.code >= 300) {",
+									"      throw new Error('Failed to create user in Service A: ' + (err || res.code));",
+									"    }",
+									"    const body = res.json();",
+									"    console.log('Created svcA_userId =', body.id);",
+									"    pm.environment.set('svcA_userId', body.id);",
+									"  });",
+									"}",
+									"",
+									"if (!userId) {",
+									"    console.log('No svcA_userId → ensure Service A token then create user');",
+									"    let svcAToken = pm.environment.get('svcA_access_token');",
+									"    let prep_uuid4 = (pm.variables.replaceIn('{{$randomUUID}}')).slice(-4);",
+									"",
+									"    if (!svcABaseUrl) {",
+									"    throw new Error('svcA_baseUrl is not set in environment');",
+									"    }",
+									"",
+									"    if (!svcAToken) {",
+									"        pm.sendRequest({",
+									"        url: svcABaseUrl + '/auth/token',",
+									"        method: 'POST',",
+									"        header: { 'Content-Type': 'application/json' },",
+									"        body: {",
+									"            mode: 'raw',",
+									"            raw: JSON.stringify({",
+									"            client_id: pm.environment.get('svcA_client_id'),",
+									"            client_secret: pm.environment.get('svcA_client_secret')",
+									"            })",
+									"        }",
+									"        }, function (err, res) {",
+									"        if (err || res.code >= 300) {",
+									"            throw new Error('Failed to get Service A token inside Orders pre-request: ' + (err || res.code));",
+									"        }",
+									"        const data = res.json();",
+									"        const token = data.access_token || data.token;",
+									"        pm.environment.set('svcA_access_token', token);",
+									"        createUserWithToken(token);",
+									"        });",
+									"    } else {",
+									"        createUserWithToken(svcAToken);",
+									"    }",
+									"} else {",
+									"  console.log('Reuse existing svcA_userId =', userId);",
+									"}"
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {},
+								"exec": [
+									""
+								]
+							}
+						}
+					]
+				}
+			],
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"type": "text/javascript",
+						"requests": {},
+						"exec": [
+							"// Service B folder pre-request: ensure svcB_access_token",
+							"const svcBBaseUrl = pm.environment.get('svcB_baseUrl');",
+							"let svcBToken = pm.environment.get('svcB_access_token');",
+							"",
+							"if (!svcBToken) {",
+							"  console.log('No svcB_access_token yet → requesting new one');",
+							"  if (!svcBBaseUrl) {",
+							"  throw new Error('svcB_baseUrl is not set in environment');",
+							"    }",
+							"  pm.sendRequest({",
+							"    url: svcBBaseUrl + '/auth/token',",
+							"    method: 'POST',",
+							"    header: { 'Content-Type': 'application/json'",
+							"        },",
+							"    body: {",
+							"      mode: 'raw',",
+							"      raw: JSON.stringify({",
+							"        client_id: pm.environment.get('svcB_client_id'),",
+							"        client_secret: pm.environment.get('svcB_client_secret')",
+							"            })",
+							"        }",
+							"    }, function (err, res) {",
+							"    if (err || res.code >= 300) {",
+							"      throw new Error('Failed to get Service B token: ' + (err || res.code));",
+							"        }",
+							"    const data = res.json();",
+							"    const token = data.access_token || data.token;",
+							"    pm.environment.set('svcB_access_token', token);",
+							"    pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + token",
+							"        });",
+							"    });",
+							"} else {",
+							"  pm.request.headers.upsert({ key: 'Authorization', value: 'Bearer ' + svcBToken",
+							"    });",
+							"}"
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"packages": {},
+						"requests": {},
+						"exec": [
+							""
+						]
+					}
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"requests": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "svcA_baseUrl",
+			"value": "https://svc-a.example.com",
+			"disabled": true
+		},
+		{
+			"key": "svcB_baseUrl",
+			"value": "https://svc-b.example.com",
+			"disabled": true
+		},
+		{
+			"key": "svcA_client_id",
+			"value": "svcA-client-id",
+			"disabled": true
+		},
+		{
+			"key": "svcA_client_secret",
+			"value": "svcA-client-secret",
+			"disabled": true
+		},
+		{
+			"key": "svcB_client_id",
+			"value": "svcB-client-id",
+			"disabled": true
+		},
+		{
+			"key": "svcB_client_secret",
+			"value": "svcB-client-secret",
+			"disabled": true
+		},
+		{
+			"key": "timestamp",
+			"value": "{{$timestamp}}",
+			"disabled": true
+		}
+	]
+}
